@@ -1,0 +1,130 @@
+import { useState } from "react";
+import { Outlet, Link, useLocation } from "react-router";
+import {
+  LayoutDashboard,
+  BookOpen,
+  ShoppingBag,
+  Users,
+  Settings,
+  LogOut,
+  Menu,
+  X,
+  ChevronRight,
+} from "lucide-react";
+
+const navItems = [
+  { path: "/admin", label: "Dashboard", icon: LayoutDashboard },
+  { path: "/admin/products", label: "Kelola Produk", icon: BookOpen },
+  { path: "/admin/orders", label: "Pesanan", icon: ShoppingBag },
+  { path: "/admin/users", label: "Pengguna", icon: Users },
+  { path: "/admin/settings", label: "Pengaturan", icon: Settings },
+];
+
+export function AdminLayout() {
+  const location = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const isActive = (path: string) => {
+    if (path === "/admin") return location.pathname === "/admin";
+    return location.pathname.startsWith(path);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-100 flex">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={`fixed top-0 left-0 h-full w-60 bg-[#1E3A5F] z-50 transition-transform duration-300 lg:translate-x-0 lg:static lg:z-auto flex flex-col ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        {/* Logo */}
+        <div className="px-4 py-5 border-b border-white/10">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-[#F59E0B] rounded-lg flex items-center justify-center">
+              <BookOpen size={16} className="text-white" />
+            </div>
+            <div>
+              <p className="text-white text-sm font-semibold">Toko Buku</p>
+              <p className="text-white/50 text-xs">Admin Panel</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Nav */}
+        <nav className="flex-1 py-4 px-2 space-y-1">
+          {navItems.map((item) => (
+            <Link
+              key={item.path}
+              to={item.path}
+              onClick={() => setSidebarOpen(false)}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors relative ${
+                isActive(item.path)
+                  ? "bg-white/10 text-white"
+                  : "text-white/60 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              {isActive(item.path) && (
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-[#F59E0B] rounded-r" />
+              )}
+              <item.icon size={18} />
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-white/10">
+          <Link
+            to="/"
+            className="flex items-center gap-2 text-white/60 hover:text-white text-sm transition-colors"
+          >
+            <LogOut size={16} />
+            Keluar Admin
+          </Link>
+        </div>
+      </aside>
+
+      {/* Main */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Top bar */}
+        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 sticky top-0 z-30">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden text-[#6B7280] hover:text-[#1F2937]"
+            >
+              <Menu size={20} />
+            </button>
+            <div className="hidden sm:flex items-center gap-1 text-xs text-[#6B7280]">
+              <Link to="/" className="hover:text-[#1E3A5F]">Beranda</Link>
+              <ChevronRight size={12} />
+              <span className="text-[#1F2937] font-medium">Admin</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right hidden sm:block">
+              <p className="text-sm font-semibold text-[#1F2937]">Admin Toko</p>
+              <p className="text-xs text-[#6B7280]">Super Admin</p>
+            </div>
+            <div className="w-9 h-9 bg-[#1E3A5F] rounded-full flex items-center justify-center text-white text-sm font-semibold">
+              AT
+            </div>
+          </div>
+        </header>
+
+        {/* Page content */}
+        <main className="flex-1 p-4 sm:p-6 overflow-auto">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}

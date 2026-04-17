@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, router, usePage } from "@inertiajs/react";
 import { ShoppingCart, Search, User, BookOpen, Menu, X } from "lucide-react";
-import { useApp } from "../context/AppContext";
 
 interface NavbarProps {
   onSearch?: (query: string) => void;
@@ -9,8 +8,7 @@ interface NavbarProps {
 }
 
 export function Navbar({ onSearch, searchValue = "" }: NavbarProps) {
-  const { cartCount } = useApp();
-  const navigate = useNavigate();
+  const { cartCount } = usePage().props as any;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [localSearch, setLocalSearch] = useState(searchValue);
 
@@ -19,7 +17,7 @@ export function Navbar({ onSearch, searchValue = "" }: NavbarProps) {
     if (onSearch) {
       onSearch(localSearch);
     } else {
-      navigate(`/?search=${encodeURIComponent(localSearch)}`);
+      router.get("/", { search: localSearch }, { preserveState: true, replace: true });
     }
   };
 
@@ -28,7 +26,7 @@ export function Navbar({ onSearch, searchValue = "" }: NavbarProps) {
       <div className="max-w-[1280px] mx-auto px-4 py-3">
         <div className="flex items-center gap-4">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 flex-shrink-0">
+          <Link href="/" className="flex items-center gap-2 flex-shrink-0">
             <div className="w-8 h-8 bg-[#F59E0B] rounded-lg flex items-center justify-center">
               <BookOpen size={18} className="text-white" />
             </div>
@@ -54,7 +52,7 @@ export function Navbar({ onSearch, searchValue = "" }: NavbarProps) {
 
           {/* Right actions */}
           <div className="ml-auto flex items-center gap-3">
-            <Link to="/cart" className="relative p-2 text-white hover:text-[#F59E0B] transition-colors">
+            <Link href="/cart" className="relative p-2 text-white hover:text-[#F59E0B] transition-colors">
               <ShoppingCart size={22} />
               {cartCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-[#F59E0B] text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-semibold">
@@ -63,7 +61,7 @@ export function Navbar({ onSearch, searchValue = "" }: NavbarProps) {
               )}
             </Link>
             <Link
-              to="/admin"
+              href="/admin"
               className="hidden sm:flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-sm px-3 py-1.5 rounded-lg transition-colors"
             >
               <User size={16} />
@@ -100,7 +98,7 @@ export function Navbar({ onSearch, searchValue = "" }: NavbarProps) {
         {/* Mobile menu */}
         {mobileMenuOpen && (
           <div className="mt-2 py-2 border-t border-white/20 sm:hidden">
-            <Link to="/admin" className="flex items-center gap-2 text-white text-sm py-2">
+            <Link href="/admin" className="flex items-center gap-2 text-white text-sm py-2">
               <User size={16} />
               Panel Admin
             </Link>

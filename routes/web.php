@@ -3,7 +3,9 @@
 use App\Http\Controllers\BookController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\DokuController;
 use App\Http\Controllers\Admin\AdminBookController;
+use App\Http\Controllers\Admin\AdminOrderController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -27,15 +29,28 @@ Route::get('/payment/success', [OrderController::class, 'success'])->name('payme
 Route::get('/payment/failed', [OrderController::class, 'failed'])->name('payment.failed');
 Route::get('/order-confirmation', [OrderController::class, 'confirmation'])->name('order.confirmation');
 
-// ─── Admin Routes (auth + role:admin) ────────────────────────
+// ─── DOKU Payment Routes ──────────────────────────────────────
+Route::post('/payment/doku/va/create', [DokuController::class, 'createVirtualAccount'])->name('payment.doku.va');
+Route::post('/payment/doku/qris/create', [DokuController::class, 'createQris'])->name('payment.doku.qris');
+Route::post('/payment/doku/callback', [DokuController::class, 'callback'])->name('payment.doku.callback')->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
+
+// ─── Admin Routes ─────────────────────────────────────────────
 Route::prefix('admin')->middleware(['admin'])->group(function () {
+    // Dashboard
     Route::get('/', [AdminBookController::class, 'dashboard'])->name('admin.dashboard');
+
+    // Products
     Route::get('/products', [AdminBookController::class, 'index'])->name('admin.products');
     Route::get('/products/add', [AdminBookController::class, 'create'])->name('admin.products.create');
     Route::post('/products', [AdminBookController::class, 'store'])->name('admin.products.store');
     Route::get('/products/edit/{id}', [AdminBookController::class, 'edit'])->name('admin.products.edit');
     Route::put('/products/{id}', [AdminBookController::class, 'update'])->name('admin.products.update');
     Route::delete('/products/{id}', [AdminBookController::class, 'destroy'])->name('admin.products.destroy');
+
+    // Orders
+    Route::get('/orders', [AdminOrderController::class, 'index'])->name('admin.orders');
+    Route::get('/orders/{id}', [AdminOrderController::class, 'show'])->name('admin.orders.show');
+    Route::patch('/orders/{id}/status', [AdminOrderController::class, 'updateStatus'])->name('admin.orders.status');
 });
 
 // ─── Auth Routes (dari Breeze) ────────────────────────────────

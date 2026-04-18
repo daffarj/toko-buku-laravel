@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, router, usePage } from "@inertiajs/react";
-import { ShoppingCart, Search, User, BookOpen, Menu, X } from "lucide-react";
+import { ShoppingCart, Search, User, Menu, X } from "lucide-react";
 
 interface NavbarProps {
     onSearch?: (query: string) => void;
@@ -30,16 +30,12 @@ export function Navbar({ onSearch, searchValue = "" }: NavbarProps) {
             <div className="max-w-[1280px] mx-auto px-4 py-3">
                 <div className="flex items-center gap-4">
                     {/* Logo */}
-                    <Link
-                        href="/"
-                        className="flex items-center gap-2 flex-shrink-0"
-                    >
-                        <div className="w-8 h-8 bg-[#F59E0B] rounded-lg flex items-center justify-center">
-                            <BookOpen size={18} className="text-white" />
-                        </div>
-                        <span className="text-white text-lg font-semibold hidden sm:block">
-                            Toko Buku
-                        </span>
+                    <Link href="/" className="flex items-center flex-shrink-0">
+                        <img
+                            src="/logo.svg"
+                            alt="Toko Buku"
+                            className="h-9 w-auto"
+                        />
                     </Link>
 
                     {/* Search */}

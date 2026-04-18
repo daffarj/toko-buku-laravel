@@ -67,31 +67,47 @@ export default function AdminLayout({ children }: Props) {
 
                 {/* Nav */}
                 <nav className="flex-1 py-4 px-2 space-y-1">
-                    {navItems.map((item) => (
-                        <Link
-                            key={item.path}
-                            href={item.path}
-                            onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors relative ${
-                                isActive(item.path)
-                                    ? "bg-white/10 text-white"
-                                    : "text-white/60 hover:text-white hover:bg-white/5"
-                            }`}
-                        >
-                            {isActive(item.path) && (
-                                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-[#F59E0B] rounded-r" />
-                            )}
-                            <item.icon size={18} />
-                            {item.label}
-                        </Link>
-                    ))}
+                    {navItems.map((item) =>
+                        item.ready ? (
+                            <Link
+                                key={item.path}
+                                href={item.path}
+                                onClick={() => setSidebarOpen(false)}
+                                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors relative ${
+                                    isActive(item.path)
+                                        ? "bg-white/10 text-white"
+                                        : "text-white/60 hover:text-white hover:bg-white/5"
+                                }`}
+                            >
+                                {isActive(item.path) && (
+                                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 bg-[#F59E0B] rounded-r" />
+                                )}
+                                <item.icon size={18} />
+                                {item.label}
+                            </Link>
+                        ) : (
+                            <div
+                                key={item.path}
+                                title="Segera hadir"
+                                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-white/25 cursor-not-allowed relative"
+                            >
+                                <item.icon size={18} />
+                                {item.label}
+                                <span className="ml-auto text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-white/40">
+                                    Soon
+                                </span>
+                            </div>
+                        ),
+                    )}
                 </nav>
 
                 {/* Footer */}
                 <div className="p-4 border-t border-white/10">
                     <Link
-                        href="/"
-                        className="flex items-center gap-2 text-white/60 hover:text-white text-sm transition-colors"
+                        href="/logout"
+                        method="post"
+                        as="button"
+                        className="flex items-center gap-2 text-white/60 hover:text-white text-sm transition-colors w-full"
                     >
                         <LogOut size={16} />
                         Keluar Admin

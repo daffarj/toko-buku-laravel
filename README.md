@@ -1,59 +1,285 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# 📚 Toko Buku Jaya — E-Commerce Buku Online
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Aplikasi e-commerce toko buku berbasis web yang dibangun menggunakan **Laravel 13**, **React 18**, dan **Inertia.js**. Dilengkapi dengan panel admin, sistem keranjang belanja, alur checkout lengkap, dan integrasi pembayaran **DOKU** (Virtual Account & QRIS).
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## ✨ Fitur Utama
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### 👤 Customer
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- Daftar buku dengan filter kategori dan pencarian
+- Halaman detail buku dengan ulasan dan rekomendasi
+- Keranjang belanja berbasis session
+- Alur checkout lengkap (Cart → Payment → Konfirmasi)
+- Pembayaran via Virtual Account (BCA, Mandiri, BNI, BRI) dan QRIS
+- Halaman status pembayaran (sukses / gagal)
 
-## Learning Laravel
+### 🛠️ Admin Panel
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+- Dashboard dengan metrik: total produk, pesanan, pendapatan, pengguna
+- Kelola produk (CRUD): tambah, edit, hapus soft delete, upload cover buku
+- Kelola pesanan: daftar, detail, update status (Menunggu → Diproses → Dikirim → Selesai)
+- Filter & pencarian pesanan berdasarkan status
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### 🔐 Autentikasi
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+- Register & Login dengan role (admin / customer)
+- Middleware proteksi route admin
+- Logout dengan session cleanup
 
-## Agentic Development
+---
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## 🧰 Tech Stack
+
+| Layer      | Teknologi                        |
+| ---------- | -------------------------------- |
+| Backend    | PHP 8.3, Laravel 13              |
+| Frontend   | React 18, TypeScript, Inertia.js |
+| Styling    | Tailwind CSS v4, shadcn/ui       |
+| Build Tool | Vite 8                           |
+| Database   | MySQL                            |
+| Payment    | DOKU (Virtual Account & QRIS)    |
+| Auth       | Laravel Breeze                   |
+| Routing    | Ziggy                            |
+
+---
+
+## 🚀 Instalasi & Setup Lokal
+
+### Prasyarat
+
+- PHP >= 8.3
+- Composer
+- Node.js >= 18
+- MySQL
+- XAMPP / Laragon / Laravel Herd
+
+### Langkah Instalasi
+
+**1. Clone repository**
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+git clone https://github.com/daffarj/toko-buku-laravel.git
+cd toko-buku-laravel
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+**2. Install dependencies**
 
-## Contributing
+```bash
+composer install
+npm install
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+**3. Setup environment**
 
-## Code of Conduct
+```bash
+cp .env.example .env
+php artisan key:generate
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+**4. Konfigurasi database di `.env`**
 
-## Security Vulnerabilities
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=toko_buku
+DB_USERNAME=root
+DB_PASSWORD=
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+**5. Konfigurasi DOKU Payment di `.env`**
 
-## License
+```env
+DOKU_CLIENT_ID=your_client_id
+DOKU_SECRET_KEY=your_secret_key
+DOKU_BASE_URL=https://api-sandbox.doku.com
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
-# toko-buku-laravel
+**6. Jalankan migrasi & seeder**
+
+```bash
+php artisan migrate --seed
+```
+
+**7. Setup storage & routes**
+
+```bash
+php artisan storage:link
+php artisan ziggy:generate
+```
+
+**8. Jalankan server**
+
+```bash
+# Terminal 1
+php artisan serve
+
+# Terminal 2
+npm run dev
+```
+
+Buka `http://127.0.0.1:8000` di browser.
+
+---
+
+## 🔑 Akun Default (Seeder)
+
+| Role     | Email              | Password |
+| -------- | ------------------ | -------- |
+| Admin    | admin@tokobuku.com | password |
+| Customer | budi@example.com   | password |
+| Customer | siti@example.com   | password |
+
+---
+
+## 📁 Struktur Project
+
+```
+toko-buku-laravel/
+├── app/
+│   ├── Http/
+│   │   ├── Controllers/
+│   │   │   ├── Admin/
+│   │   │   │   ├── AdminBookController.php    # CRUD produk + dashboard
+│   │   │   │   └── AdminOrderController.php   # Kelola pesanan
+│   │   │   ├── BookController.php             # Halaman customer
+│   │   │   ├── CartController.php             # Keranjang (session)
+│   │   │   ├── OrderController.php            # Checkout & payment flow
+│   │   │   └── DokuController.php             # Integrasi DOKU
+│   │   └── Middleware/
+│   │       ├── EnsureIsAdmin.php              # Proteksi route admin
+│   │       └── HandleInertiaRequests.php      # Share global props
+│   └── Models/
+│       ├── Book.php
+│       ├── Order.php
+│       ├── OrderItem.php
+│       ├── CartItem.php
+│       ├── Review.php
+│       └── User.php
+├── resources/js/
+│   ├── Pages/
+│   │   ├── ProductList.tsx        # Halaman utama daftar buku
+│   │   ├── ProductDetail.tsx      # Detail buku
+│   │   ├── Cart.tsx               # Keranjang belanja
+│   │   ├── PaymentMethod.tsx      # Pilih metode bayar
+│   │   ├── PaymentCode.tsx        # Kode VA / QRIS
+│   │   ├── PaymentSuccess.tsx     # Pembayaran sukses
+│   │   ├── PaymentFailed.tsx      # Pembayaran gagal
+│   │   └── admin/
+│   │       ├── AdminDashboard.tsx
+│   │       ├── AdminProductList.tsx
+│   │       ├── AddProduct.tsx
+│   │       ├── EditProduct.tsx
+│   │       ├── AdminOrderList.tsx
+│   │       └── AdminOrderDetail.tsx
+│   └── Components/
+│       ├── Navbar.tsx
+│       ├── AdminLayout.tsx
+│       └── CustomerLayout.tsx
+├── database/
+│   ├── migrations/
+│   └── seeders/
+├── config/
+│   └── doku.php
+└── routes/
+    ├── web.php
+    └── auth.php
+```
+
+---
+
+## 🗺️ Daftar Route
+
+### Customer
+
+| Method | URL                | Keterangan          |
+| ------ | ------------------ | ------------------- |
+| GET    | `/`                | Daftar produk       |
+| GET    | `/product/{id}`    | Detail produk       |
+| GET    | `/cart`            | Keranjang           |
+| POST   | `/cart/add`        | Tambah ke keranjang |
+| PATCH  | `/cart/{bookId}`   | Update jumlah       |
+| DELETE | `/cart/{bookId}`   | Hapus item          |
+| GET    | `/payment`         | Pilih metode bayar  |
+| POST   | `/payment/confirm` | Buat order          |
+| GET    | `/payment/code`    | Kode pembayaran     |
+| POST   | `/payment/verify`  | Verifikasi bayar    |
+
+### Admin
+
+| Method | URL                         | Keterangan            |
+| ------ | --------------------------- | --------------------- |
+| GET    | `/admin`                    | Dashboard             |
+| GET    | `/admin/products`           | Daftar produk         |
+| POST   | `/admin/products`           | Tambah produk         |
+| PUT    | `/admin/products/{id}`      | Edit produk           |
+| DELETE | `/admin/products/{id}`      | Hapus produk          |
+| GET    | `/admin/orders`             | Daftar pesanan        |
+| GET    | `/admin/orders/{id}`        | Detail pesanan        |
+| PATCH  | `/admin/orders/{id}/status` | Update status pesanan |
+
+### DOKU Payment
+
+| Method | URL                         | Keterangan               |
+| ------ | --------------------------- | ------------------------ |
+| POST   | `/payment/doku/va/create`   | Buat Virtual Account     |
+| POST   | `/payment/doku/qris/create` | Buat QRIS                |
+| POST   | `/payment/doku/callback`    | Webhook notifikasi bayar |
+
+---
+
+## 💳 Alur Pembayaran DOKU
+
+```
+Customer pilih produk
+        ↓
+Tambah ke keranjang
+        ↓
+Isi informasi pengiriman & pilih metode bayar
+(VA: BCA / Mandiri / BNI / BRI  atau  QRIS)
+        ↓
+POST /payment/confirm → Order dibuat di DB
+        ↓
+POST /payment/doku/va/create  atau  /qris/create
+        ↓
+DOKU API mengembalikan nomor VA / QR String
+        ↓
+Customer melakukan pembayaran
+        ↓
+DOKU kirim webhook → POST /payment/doku/callback
+        ↓
+Status order otomatis berubah → "Diproses"
+```
+
+---
+
+## 🧪 Testing Pembayaran (Sandbox)
+
+1. Daftar akun DOKU Developer di [dashboard.doku.com](https://dashboard.doku.com)
+2. Isi `DOKU_CLIENT_ID` dan `DOKU_SECRET_KEY` di `.env`
+3. Expose localhost dengan ngrok untuk menerima webhook:
+
+```bash
+ngrok http 8000
+```
+
+4. Tambahkan URL ngrok ke `.env`:
+
+```env
+DOKU_CALLBACK_URL=https://xxxx.ngrok.io/payment/doku/callback
+```
+
+5. Gunakan fitur **Simulate Payment** di DOKU Sandbox Dashboard untuk test transaksi
+6. Pantau log webhook:
+
+```bash
+tail -f storage/logs/laravel.log
+```
+
+---
+
+## 📝 Lisensi
+
+Project ini dibuat untuk keperluan pembelajaran. Bebas digunakan dan dimodifikasi.

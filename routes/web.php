@@ -28,7 +28,7 @@ Route::get('/payment/failed', [OrderController::class, 'failed'])->name('payment
 Route::get('/order-confirmation', [OrderController::class, 'confirmation'])->name('order.confirmation');
 
 // ─── Admin Routes (auth + role:admin) ────────────────────────
-Route::prefix('admin')->middleware(['auth', 'verified'])->group(function () {
+Route::prefix('admin')->middleware(['admin'])->group(function () {
     Route::get('/', [AdminBookController::class, 'dashboard'])->name('admin.dashboard');
     Route::get('/products', [AdminBookController::class, 'index'])->name('admin.products');
     Route::get('/products/add', [AdminBookController::class, 'create'])->name('admin.products.create');

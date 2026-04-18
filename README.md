@@ -282,4 +282,4 @@ tail -f storage/logs/laravel.log
 
 ## 📝 Lisensi
 
-Project ini dibuat untuk keperluan pembelajaran. Bebas digunakan dan dimodifikasi.
+Project ini dibuat untuk keperluan projek akhir mata kuliah "Implementasi dan Pengujian Sistem". Made with love💖 by group 2.

@@ -6,12 +6,15 @@ export function Footer() {
         <footer className="bg-[#1E3A5F] text-white mt-auto">
             <div className="max-w-[1280px] mx-auto px-4 py-8">
                 <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 bg-[#F59E0B] rounded-lg flex items-center justify-center">
-                            <BookOpen size={14} className="text-white" />
-                        </div>
-                        <span className="font-semibold">Toko Buku</span>
-                    </div>
+                    {/* logo footer */}
+                    <Link href="/" className="flex items-center flex-shrink-0">
+                        <img
+                            src="/logo.svg"
+                            alt="Toko Buku"
+                            className="h-9 w-auto"
+                        />
+                    </Link>
+
                     <nav className="flex items-center gap-6 text-sm text-white/70">
                         <Link
                             href="#"

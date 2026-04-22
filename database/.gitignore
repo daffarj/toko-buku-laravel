@@ -1,1 +1,6 @@
 *.sqlite*
+
+private.key
+pkcs8.key
+public.key
+storage/app/*.key

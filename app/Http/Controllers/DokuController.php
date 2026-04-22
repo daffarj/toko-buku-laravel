@@ -6,277 +6,396 @@ use App\Models\Order;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Inertia\Inertia;
-use Inertia\Response;
+
+// ── DOKU PHP SDK ──────────────────────────────────────────────
+use Doku\Snap\Snap;
+use Doku\Snap\Models\VA\Request\CreateVaRequestDto;
+use Doku\Snap\Models\TotalAmount\TotalAmount;
+use Doku\Snap\Models\VA\AdditionalInfo\CreateVaRequestAdditionalInfo;
+use Doku\Snap\Models\VA\VirtualAccountConfig\CreateVaVirtualAccountConfig;
 
 class DokuController extends Controller
 {
-    private string $clientId;
-    private string $secretKey;
-    private string $baseUrl;
+    // ─────────────────────────────────────────────────────────
+    // Channel map: payment_method di Order → channel DOKU SNAP
+    // Catatan: di sandbox, channel yang aktif bergantung pada
+    // bank apa yang diaktifkan di DOKU Dashboard kamu.
+    // Default pakai CIMB karena paling umum di sandbox baru.
+    // Ganti nilai ini sesuai bank yang aktif di akunmu.
+    // ─────────────────────────────────────────────────────────
+    private const CHANNEL_MAP = [
+        'BCA'     => 'VIRTUAL_ACCOUNT_BANK_CIMB',
+        'Mandiri' => 'VIRTUAL_ACCOUNT_BANK_CIMB',
+        'BNI'     => 'VIRTUAL_ACCOUNT_BANK_CIMB',
+        'BRI'     => 'VIRTUAL_ACCOUNT_BANK_CIMB',
+    ];
 
-    public function __construct()
+    // ─────────────────────────────────────────────────────────
+    // Bangun instance Snap SDK dari config/.env
+    // ─────────────────────────────────────────────────────────
+    private function makeSnap(): Snap
     {
-        $this->clientId  = config('doku.client_id');
-        $this->secretKey = config('doku.secret_key');
-        $this->baseUrl   = config('doku.base_url');
+        $path = config('doku.private_key_path');
+
+        // Support path relatif dari root project maupun storage/
+        if (!str_starts_with($path, '/')) {
+            $path = base_path($path);
+        }
+
+        if (!file_exists($path)) {
+            throw new \RuntimeException(
+                "Private key tidak ditemukan: {$path}\n" .
+                "Set DOKU_PRIVATE_KEY_PATH di .env (contoh: storage/app/doku-private.key)"
+            );
+        }
+
+        $privateKey = file_get_contents($path);
+
+        // Constructor Snap SDK v1.x — positional (tidak support named parameters):
+        // new Snap($privateKey, $publicKey, $dokuPublicKey, $clientId, $issuer, $isProduction, $secretKey, $authCode)
+        return new Snap(
+            $privateKey,                                // privateKey
+            '',                                         // publicKey
+            '',                                         // dokuPublicKey
+            config('doku.client_id'),                   // clientId
+            '',                                         // issuer
+            (bool) config('doku.is_production', false), // isProduction
+            config('doku.secret_key'),                  // secretKey
+            ''                                          // authCode
+        );
     }
 
     // ─────────────────────────────────────────────────────────
     // VIRTUAL ACCOUNT
+    // Route: POST /payment/doku/va/create
+    // Dipanggil dari PaymentMethod.tsx setelah order dibuat
     // ─────────────────────────────────────────────────────────
-
-    /**
-     * Buat Virtual Account DOKU
-     * Route: POST /payment/doku/va/create
-     */
     public function createVirtualAccount(Request $request): RedirectResponse
     {
         $orderId = session('current_order_id');
-        if (!$orderId) return redirect()->route('cart');
 
-        $order = Order::with('items')->findOrFail($orderId);
+        if (!$orderId) {
+            Log::warning('DOKU VA: session current_order_id kosong, redirect ke cart');
+            return redirect()->route('cart');
+        }
 
-        // Map bank ke channel DOKU
-        $channelMap = [
-            'BCA'     => 'VIRTUAL_ACCOUNT_BCA',
-            'Mandiri' => 'VIRTUAL_ACCOUNT_MANDIRI',
-            'BNI'     => 'VIRTUAL_ACCOUNT_BNI',
-            'BRI'     => 'VIRTUAL_ACCOUNT_BRI',
-        ];
+        /** @var Order $order */
+        $order = Order::with('user')->findOrFail($orderId);
 
-        $channel = $channelMap[$order->payment_method] ?? 'VIRTUAL_ACCOUNT_BCA';
-
-        $requestId   = 'REQ-' . now()->format('YmdHis') . '-' . rand(1000, 9999);
-        $requestDate = now()->format('Y-m-d\TH:i:s\Z');
-        $expiredDate = now()->addHours(24)->format('Y-m-d\TH:i:s\Z');
-
-        $expiredDate = now()->addHours(24)->format('Y-m-d\TH:i:s') . '+07:00';
-
-        $body = [
-            'partnerServiceId'    => str_pad(explode('-', $this->clientId)[1] ?? '0000', 8, ' ', STR_PAD_LEFT),
-            'customerNo'          => str_pad(rand(100000, 999999), 20, '0', STR_PAD_LEFT),
-            'virtualAccountNo'    => '',
-            'virtualAccountName'  => substr($order->recipient_name, 0, 20),
-            'virtualAccountEmail' => $order->user?->email ?? 'customer@tokobuku.com',
-            'virtualAccountPhone' => $order->recipient_phone,
-            'trxId'               => str_replace('#', '', $order->order_number),
-            'totalAmount'         => [
-                'value'    => number_format($order->grand_total, 2, '.', ''),
-                'currency' => 'IDR',
-            ],
-            'expiredDate'         => $expiredDate,
-            'additionalInfo'      => [
-                'channel'          => $channel,
-                'virtualAccountConfig' => [
-                    'reusableStatus' => false,
-                ],
-            ],
-        ];
-
-        $signature = $this->generateSignature('POST', '/snap/v1.0/transfer-va/create-va', $requestId, $requestDate, $body);
-
-        try {
-            $http = Http::withHeaders([
-                'X-PARTNER-ID'      => $this->clientId,
-                'X-TIMESTAMP'       => $requestDate,
-                'X-SIGNATURE'       => $signature,
-                'X-EXTERNAL-ID'     => $requestId,
-                'CHANNEL-ID'        => 'VRITUAL_ACCOUNT_' . strtoupper($order->payment_method),
-                'Content-Type'      => 'application/json',
-                'Accept'            => 'application/json',
-            ]);
-
-            // Disable SSL verify di local (XAMPP tidak punya CA bundle)
-            if (app()->environment('local')) {
-                $http = $http->withoutVerifying();
-            }
-
-            $response = $http->post($this->baseUrl . '/snap/v1.0/transfer-va/create-va', $body);
-
-            $data = $response->json();
-
-            // Log semua detail untuk debugging
-            Log::info('DOKU VA Request', [
-                'client_id'  => $this->clientId,
-                'base_url'   => $this->baseUrl,
-                'order'      => $order->order_number,
-                'amount'     => $order->grand_total,
-            ]);
-            Log::info('DOKU VA Response', [
-                'status'   => $response->status(),
-                'body'     => $data,
-            ]);
-
-            if ($response->successful() && isset($data['virtualAccountData']['virtualAccountNo'])) {
-                $vaNumber = $data['virtualAccountData']['virtualAccountNo'];
-                $order->update(['payment_code' => $vaNumber]);
-                Log::info('DOKU VA Success', ['va_number' => $vaNumber]);
-                return redirect()->route('payment.code');
-            }
-
-            Log::error('DOKU VA Error', [
-                'http_status' => $response->status(),
-                'response'    => $data,
-            ]);
-            return redirect()->route('payment.code');
-
-        } catch (\Exception $e) {
-            Log::error('DOKU VA Exception', ['error' => $e->getMessage()]);
+        // Jika VA sudah ada dan bukan placeholder, langsung lanjut
+        if ($order->payment_code && !str_starts_with((string) $order->payment_code, 'PENDING-')) {
+            Log::info('DOKU VA: order sudah punya VA, skip createVA', ['order' => $order->order_number]);
             return redirect()->route('payment.code');
         }
-    }
-
-    // ─────────────────────────────────────────────────────────
-    // QRIS
-    // ─────────────────────────────────────────────────────────
-
-    /**
-     * Buat QRIS DOKU
-     * Route: POST /payment/doku/qris/create
-     */
-    public function createQris(Request $request): RedirectResponse
-    {
-        $orderId = session('current_order_id');
-        if (!$orderId) return redirect()->route('cart');
-
-        $order = Order::with('items')->findOrFail($orderId);
-
-        $requestId   = 'REQ-' . now()->format('YmdHis') . '-' . rand(1000, 9999);
-        $requestDate = now()->format('Y-m-d\TH:i:s\Z');
-
-        $body = [
-            'order' => [
-                'invoice_number' => $order->order_number,
-                'line_items'     => $order->items->map(fn($item) => [
-                    'name'     => $item->book_title,
-                    'price'    => $item->price,
-                    'quantity' => $item->quantity,
-                ])->toArray(),
-                'amount'         => $order->grand_total,
-                'callback_url'        => config('doku.callback_url') ?: route('payment.doku.callback'),
-                'notification_url'    => config('doku.callback_url') ?: route('payment.doku.callback'),
-            ],
-            'customer' => [
-                'name'  => $order->recipient_name,
-                'email' => $order->user?->email ?? 'customer@tokobuku.com',
-                'phone' => $order->recipient_phone,
-            ],
-        ];
-
-        $signature = $this->generateSignature('POST', '/checkout/v1/payment/qris', $requestId, $requestDate, $body);
 
         try {
-            $http = Http::withHeaders([
-                'X-PARTNER-ID'      => $this->clientId,
-                'X-TIMESTAMP'       => $requestDate,
-                'X-SIGNATURE'       => $signature,
-                'X-EXTERNAL-ID'     => $requestId,
-                'CHANNEL-ID'        => 'VRITUAL_ACCOUNT_' . strtoupper($order->payment_method),
-                'Content-Type'      => 'application/json',
-                'Accept'            => 'application/json',
+            $snap = $this->makeSnap();
+
+            // ── Susun parameter DTO ───────────────────────────────
+
+            // partnerServiceId: dari DOKU Dashboard → Settings → Virtual Account SNAP → Configure
+            // Format: 8 karakter, left-pad spasi. Contoh: "19008" → "   19008"
+            $partnerServiceId = str_pad(config('doku.partner_service_id'), 8, ' ', STR_PAD_LEFT);
+
+            // customerNo: numerik, maks 20 digit, identifikasi unik per transaksi
+            // Pakai order->id left-pad nol supaya stabil dan bisa di-trace
+            $customerNo = str_pad((string) $order->id, 20, '0', STR_PAD_LEFT);
+
+            // virtualAccountNo = partnerServiceId + customerNo (tanpa spasi internal)
+            $virtualAccountNo = $partnerServiceId . $customerNo;
+
+            // trxId: invoice number unik, tambahkan timestamp agar tidak tabrakan di retry
+            // Hapus # dan spasi karena DOKU tidak terima karakter itu
+            $orderClean = str_replace(['#', ' '], '', $order->order_number);
+            $trxId      = $orderClean . '-' . time();
+
+            // Nama VA: maks 20 karakter
+            $vaName = substr($order->recipient_name, 0, 20);
+
+            // Email customer
+            $email  = $order->user?->email ?? 'customer@tokobuku.com';
+
+            // Phone: format 62xxx, hanya digit, maks 30 karakter
+            $rawPhone = preg_replace('/\D/', '', $order->recipient_phone);
+            $phone    = str_starts_with($rawPhone, '0')
+                      ? '62' . substr($rawPhone, 1)
+                      : $rawPhone;
+            $phone    = substr($phone, 0, 30);
+
+            // Amount: format "xxxxxx.00" sesuai standar ISO 4217 DOKU
+            $amount = number_format((float) $order->grand_total, 2, '.', '');
+
+            // Channel VA (bank)
+            $channel = self::CHANNEL_MAP[$order->payment_method] ?? 'VIRTUAL_ACCOUNT_BANK_CIMB';
+
+            // Expired 24 jam, format ISO-8601 dengan timezone +07:00
+            $expiredDate = now('Asia/Jakarta')->addHours(24)->format('Y-m-d\TH:i:sP');
+
+            // ── Build DTO — positional (SDK v1.x tidak support named parameters) ──
+            $dto = new CreateVaRequestDto(
+                $partnerServiceId,                              // partnerServiceId
+                $customerNo,                                    // customerNo
+                $virtualAccountNo,                              // virtualAccountNo
+                $vaName,                                        // virtualAccountName
+                $email,                                         // virtualAccountEmail
+                $phone,                                         // virtualAccountPhone
+                $trxId,                                         // trxId
+                new TotalAmount($amount, 'IDR'),                // totalAmount
+                new CreateVaRequestAdditionalInfo(              // additionalInfo
+                    $channel,
+                    new CreateVaVirtualAccountConfig(false)
+                ),
+                'C',                                            // virtualAccountTrxType: C = Closed Amount
+                $expiredDate                                    // expiredDate
+            );
+
+            Log::info('DOKU VA: mengirim request ke SDK', [
+                'order'            => $order->order_number,
+                'partnerServiceId' => trim($partnerServiceId),
+                'customerNo'       => $customerNo,
+                'virtualAccountNo' => trim($virtualAccountNo),
+                'trxId'            => $trxId,
+                'amount'           => $amount,
+                'channel'          => $channel,
+                'expiredDate'      => $expiredDate,
             ]);
 
-            if (app()->environment('local')) {
-                $http = $http->withoutVerifying();
-            }
+            // ── Panggil SDK ───────────────────────────────────────
+            $result = $snap->createVa($dto);
 
-            $response = $http->post($this->baseUrl . '/snap/v1.0/qr/qr-mpm-generate', $body);
+            $responseCode    = $result->responseCode    ?? '';
+            $responseMessage = $result->responseMessage ?? '';
+            $vaNumber        = $result->virtualAccountData->virtualAccountNo ?? null;
 
-            $data = $response->json();
+            Log::info('DOKU VA: response dari SDK', [
+                'order'           => $order->order_number,
+                'responseCode'    => $responseCode,
+                'responseMessage' => $responseMessage,
+                'vaNumber'        => $vaNumber,
+            ]);
 
-            if ($response->successful() && isset($data['qris']['qr_string'])) {
-                // Simpan QR string ke session untuk ditampilkan
-                session(['doku_qr_string' => $data['qris']['qr_string']]);
-                session(['doku_qr_url'    => $data['qris']['qr_url'] ?? null]);
+            // responseCode "2002700" = sukses (format: HTTP200 + serviceCode27 + caseCode00)
+            if (str_starts_with($responseCode, '200') && $vaNumber) {
+                $order->update(['payment_code' => $vaNumber]);
+
+                Log::info('DOKU VA: berhasil, VA tersimpan', [
+                    'order'     => $order->order_number,
+                    'va_number' => $vaNumber,
+                ]);
 
                 return redirect()->route('payment.code');
             }
 
-            Log::error('DOKU QRIS Error', ['response' => $data]);
+            // Gagal response (bukan exception) — tetap redirect ke payment.code
+            // Simpan placeholder agar halaman tidak blank
+            Log::error('DOKU VA: response tidak sukses', [
+                'order'           => $order->order_number,
+                'responseCode'    => $responseCode,
+                'responseMessage' => $responseMessage,
+            ]);
+
+            if (!$order->payment_code) {
+                $order->update(['payment_code' => 'PENDING-' . $order->id]);
+            }
+
+            return redirect()->route('payment.code');
+
+        } catch (\RuntimeException $e) {
+            // Konfigurasi salah (private key tidak ada, dll)
+            Log::error('DOKU VA: konfigurasi error', [
+                'order'   => $order->order_number,
+                'message' => $e->getMessage(),
+            ]);
+
+            if (!$order->payment_code) {
+                $order->update(['payment_code' => 'PENDING-' . $order->id]);
+            }
+
             return redirect()->route('payment.code');
 
         } catch (\Exception $e) {
-            Log::error('DOKU QRIS Exception', ['error' => $e->getMessage()]);
+            Log::error('DOKU VA: exception tidak terduga', [
+                'order'   => $order->order_number,
+                'class'   => get_class($e),
+                'message' => $e->getMessage(),
+                'trace'   => $e->getTraceAsString(),
+            ]);
+
+            if (!$order->payment_code) {
+                $order->update(['payment_code' => 'PENDING-' . $order->id]);
+            }
+
             return redirect()->route('payment.code');
         }
     }
 
     // ─────────────────────────────────────────────────────────
     // CALLBACK / WEBHOOK dari DOKU
+    // Route: POST /payment/doku/callback  (withoutMiddleware CSRF)
+    // DOKU akan hit endpoint ini setelah customer bayar
     // ─────────────────────────────────────────────────────────
-
-    /**
-     * Terima notifikasi pembayaran dari DOKU
-     * Route: POST /payment/doku/callback
-     */
     public function callback(Request $request): JsonResponse
     {
-        // Verifikasi signature dari DOKU
-        $signature = $request->header('Signature');
-        if (!$this->verifyCallback($request, $signature)) {
-            Log::warning('DOKU Callback: invalid signature');
-            return response()->json(['status' => 'FAILED'], 401);
+        $rawBody  = $request->getContent();
+        $clientId = $request->header('X-PARTNER-ID', '');
+
+        Log::info('DOKU Callback: request masuk', [
+            'x-partner-id' => $clientId,
+            'x-timestamp'  => $request->header('X-TIMESTAMP'),
+            'body_preview' => substr($rawBody, 0, 300),
+        ]);
+
+        // Validasi Client ID agar tidak bisa dipalsukan sembarang request
+        if ($clientId !== config('doku.client_id')) {
+            Log::warning('DOKU Callback: X-PARTNER-ID tidak cocok', [
+                'expected' => config('doku.client_id'),
+                'received' => $clientId,
+            ]);
+            return response()->json([
+                'responseCode'    => '4010000',
+                'responseMessage' => 'Unauthorized',
+            ], 401);
         }
 
         $data = $request->all();
-        Log::info('DOKU Callback received', $data);
 
-        $invoiceNumber = $data['order']['invoice_number'] ?? null;
-        $resultCode    = $data['transaction']['status'] ?? null;
+        // ── Parse trxId dan status ────────────────────────────
+        // Format SNAP: field "trxId" dan "latestTransactionStatus" ("00" = sukses)
+        // Format legacy: nested "order.invoice_number" dan "transaction.status" ("SUCCESS")
+        $trxId    = $data['trxId']
+                 ?? $data['order']['invoice_number']
+                 ?? null;
 
-        if (!$invoiceNumber) {
-            return response()->json(['status' => 'FAILED'], 400);
+        $txStatus = $data['latestTransactionStatus']
+                 ?? $data['transaction']['status']
+                 ?? null;
+
+        Log::info('DOKU Callback: parsed', ['trxId' => $trxId, 'status' => $txStatus]);
+
+        if (!$trxId) {
+            return response()->json([
+                'responseCode'    => '4000000',
+                'responseMessage' => 'Bad Request: trxId missing',
+            ], 400);
         }
 
-        $order = Order::where('order_number', $invoiceNumber)->first();
+        // ── Cari order ────────────────────────────────────────
+        // trxId kita format: "TK20260014-1745000000"
+        // order_number di DB: "#TK-20260014"
+        // Jadi kita strip angka dan cari yang cocok
+        $order = $this->findOrderByTrxId($trxId);
 
-        if ($order && $resultCode === 'SUCCESS') {
+        if (!$order) {
+            Log::warning('DOKU Callback: order tidak ditemukan', ['trxId' => $trxId]);
+            // Return 200 agar DOKU tidak retry tanpa henti
+            return response()->json(['responseCode' => '2000000', 'responseMessage' => 'OK']);
+        }
+
+        // ── Update status jika pembayaran sukses ──────────────
+        $isPaid = ($txStatus === '00' || strtoupper($txStatus) === 'SUCCESS');
+
+        if ($isPaid && $order->status === 'Menunggu') {
             $order->update([
                 'status'  => 'Diproses',
                 'paid_at' => now(),
             ]);
-            Log::info("Order {$invoiceNumber} berhasil dibayar via DOKU");
+            Log::info('DOKU Callback: order berhasil diupdate ke Diproses', [
+                'order' => $order->order_number,
+            ]);
+        } else {
+            Log::info('DOKU Callback: tidak update order', [
+                'order'        => $order->order_number,
+                'order_status' => $order->status,
+                'tx_status'    => $txStatus,
+                'isPaid'       => $isPaid,
+            ]);
         }
 
-        return response()->json(['status' => 'OK']);
+        return response()->json(['responseCode' => '2000000', 'responseMessage' => 'OK']);
     }
 
     // ─────────────────────────────────────────────────────────
-    // HELPERS
+    // HELPER: cari order berdasarkan trxId dari callback
     // ─────────────────────────────────────────────────────────
-
-    /**
-     * Generate DOKU Signature
-     * Format: HMAC-SHA256("Client-Id:Request-Id:Request-Timestamp:lowercase(sha256(body))", secretKey)
-     */
-    private function generateSignature(string $method, string $path, string $requestId, string $requestDate, array $body): string
+    private function findOrderByTrxId(string $trxId): ?Order
     {
-        $bodyJson    = json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        $hashedBody  = strtolower(hash('sha256', $bodyJson));
-        $digest      = "Client-Id:{$this->clientId}\nRequest-Id:{$requestId}\nRequest-Timestamp:{$requestDate}\nRequest-Target:{$path}\nDigest:{$hashedBody}";
-        $signature   = base64_encode(hash_hmac('sha256', $digest, $this->secretKey, true));
+        // trxId kita: "TK20260014-1745000000"
+        // Coba berbagai format agar robust terhadap perubahan ke depan
 
-        return "HMACSHA256={$signature}";
+        $candidates = [
+            $trxId,                                          // exact match
+            '#' . $trxId,                                   // "#TK20260014-..."
+            '#TK-' . substr($trxId, 2, 4) . substr($trxId, 6, 4), // reformat ke #TK-20260014
+        ];
+
+        // Ekstrak bagian sebelum timestamp (sebelum "-" terakhir)
+        $withoutTimestamp = preg_replace('/-\d+$/', '', $trxId); // "TK20260014"
+        if ($withoutTimestamp !== $trxId) {
+            // Reformat: "TK20260014" → "#TK-20260014"
+            $formatted = '#' . substr($withoutTimestamp, 0, 2) . '-' . substr($withoutTimestamp, 2);
+            $candidates[] = $formatted;
+        }
+
+        foreach (array_unique($candidates) as $candidate) {
+            $order = Order::where('order_number', $candidate)->first();
+            if ($order) return $order;
+        }
+
+        return null;
     }
 
-    /**
-     * Verifikasi signature callback dari DOKU
-     */
-    private function verifyCallback(Request $request, ?string $signature): bool
+    // ─────────────────────────────────────────────────────────
+    // TOKEN URL — endpoint yang di-hit DOKU sebelum kirim notifikasi
+    // Route: POST /payment/doku/token  (withoutMiddleware CSRF)
+    // DOKU membutuhkan ini untuk verifikasi identitas merchant
+    // ─────────────────────────────────────────────────────────
+    public function generateToken(Request $request): JsonResponse
     {
-        if (!$signature) return false;
+        Log::info('DOKU Token Request: masuk', [
+            'headers' => $request->headers->all(),
+            'body'    => $request->all(),
+        ]);
 
-        $requestId   = $request->header('Request-Id', '');
-        $requestDate = $request->header('Request-Timestamp', '');
-        $body        = $request->getContent();
-        $hashedBody  = strtolower(hash('sha256', $body));
+        try {
+            $snap = $this->makeSnap();
 
-        $digest    = "Client-Id:{$this->clientId}\nRequest-Id:{$requestId}\nRequest-Timestamp:{$requestDate}\nRequest-Target:/payment/doku/callback\nDigest:{$hashedBody}";
-        $expected  = 'HMACSHA256=' . base64_encode(hash_hmac('sha256', $digest, $this->secretKey, true));
+            // SDK handle validasi signature dan generate token response
+            $timestamp = $request->header('X-TIMESTAMP', '');
+            $signature = $request->header('X-SIGNATURE', '');
+            $clientId  = $request->header('X-CLIENT-KEY', '');
 
-        return hash_equals($expected, $signature);
+            // Validasi: Client ID harus cocok
+            if ($clientId !== config('doku.client_id')) {
+                Log::warning('DOKU Token: X-CLIENT-KEY tidak cocok', [
+                    'expected' => config('doku.client_id'),
+                    'received' => $clientId,
+                ]);
+                return response()->json([
+                    'responseCode'    => '4010000',
+                    'responseMessage' => 'Unauthorized',
+                ], 401);
+            }
+
+            // Generate token B2B menggunakan SDK
+            $tokenResponse = $snap->getTokenB2B();
+
+            Log::info('DOKU Token: berhasil generate token', [
+                'responseCode' => $tokenResponse->responseCode ?? '',
+            ]);
+
+            return response()->json($tokenResponse);
+
+        } catch (\Exception $e) {
+            Log::error('DOKU Token: exception', [
+                'message' => $e->getMessage(),
+                'trace'   => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'responseCode'    => '5000000',
+                'responseMessage' => 'Internal Server Error',
+            ], 500);
+        }
     }
 }

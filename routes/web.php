@@ -32,7 +32,15 @@ Route::get('/order-confirmation', [OrderController::class, 'confirmation'])->nam
 // ─── DOKU Payment Routes ──────────────────────────────────────
 Route::post('/payment/doku/va/create', [DokuController::class, 'createVirtualAccount'])->name('payment.doku.va');
 Route::post('/payment/doku/qris/create', [DokuController::class, 'createQris'])->name('payment.doku.qris');
-Route::post('/payment/doku/callback', [DokuController::class, 'callback'])->name('payment.doku.callback')->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
+
+// Kedua route ini dipanggil DOKU dari luar — harus withoutMiddleware CSRF
+Route::post('/payment/doku/token', [DokuController::class, 'generateToken'])
+    ->name('payment.doku.token')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
+
+Route::post('/payment/doku/callback', [DokuController::class, 'callback'])
+    ->name('payment.doku.callback')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
 
 // ─── Admin Routes ─────────────────────────────────────────────
 Route::prefix('admin')->middleware(['admin'])->group(function () {

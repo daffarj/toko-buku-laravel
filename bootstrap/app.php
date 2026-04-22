@@ -19,6 +19,12 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ]);
 
+        // Exclude route DOKU dari CSRF — endpoint ini dipanggil server DOKU dari luar
+        $middleware->validateCsrfTokens(except: [
+            'payment/doku/token',
+            'payment/doku/callback',
+        ]);
+
         $middleware->alias([
             'admin' => \App\Http\Middleware\EnsureIsAdmin::class,
         ]);

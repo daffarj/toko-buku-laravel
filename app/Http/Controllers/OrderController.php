@@ -78,7 +78,7 @@ class OrderController extends Controller
                 'recipient_phone'  => $request->recipient_phone,
                 'payment_type'     => $request->payment_type,
                 'payment_method'   => $request->payment_method,
-                'payment_code'     => $this->generatePaymentCode($request->payment_method),
+                'payment_code'     => null,   // akan diisi DokuController setelah VA berhasil dibuat
                 'subtotal'         => $subtotal,
                 'shipping_cost'    => $shipping,
                 'tax'              => $tax,
@@ -203,19 +203,5 @@ class OrderController extends Controller
         ]);
     }
 
-    /**
-     * Helper: generate kode virtual account / payment
-     */
-    private function generatePaymentCode(string $method): string
-    {
-        $prefix = match ($method) {
-            'BCA'      => '8277',
-            'Mandiri'  => '8028',
-            'BNI'      => '8808',
-            'BRI'      => '8835',
-            default    => '8000',
-        };
 
-        return $prefix . ' ' . rand(1000, 9999) . ' ' . rand(1000, 9999) . ' ' . rand(1000, 9999);
-    }
 }

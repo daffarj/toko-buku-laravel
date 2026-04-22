@@ -1,3 +1,4 @@
+import React from "react";
 import { useState, ReactNode } from "react";
 import { Link, usePage } from "@inertiajs/react";
 import {
@@ -11,7 +12,14 @@ import {
     ChevronRight,
 } from "lucide-react";
 
-const navItems = [
+interface NavItem {
+    path: string;
+    label: string;
+    icon: React.ElementType;
+    ready: boolean;
+}
+
+const navItems: NavItem[] = [
     { path: "/admin", label: "Dashboard", icon: LayoutDashboard },
     { path: "/admin/products", label: "Kelola Produk", icon: BookOpen },
     { path: "/admin/orders", label: "Pesanan", icon: ShoppingBag },

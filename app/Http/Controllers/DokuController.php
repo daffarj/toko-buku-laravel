@@ -53,54 +53,74 @@ class DokuController extends Controller
         $requestDate = now()->format('Y-m-d\TH:i:s\Z');
         $expiredDate = now()->addHours(24)->format('Y-m-d\TH:i:s\Z');
 
+        $expiredDate = now()->addHours(24)->format('Y-m-d\TH:i:s') . '+07:00';
+
         $body = [
-            'order' => [
-                'invoice_number' => $order->order_number,
-                'line_items'     => $order->items->map(fn($item) => [
-                    'name'     => $item->book_title,
-                    'price'    => $item->price,
-                    'quantity' => $item->quantity,
-                ])->toArray(),
-                'amount'         => $order->grand_total,
+            'partnerServiceId'    => str_pad(explode('-', $this->clientId)[1] ?? '0000', 8, ' ', STR_PAD_LEFT),
+            'customerNo'          => str_pad(rand(100000, 999999), 20, '0', STR_PAD_LEFT),
+            'virtualAccountNo'    => '',
+            'virtualAccountName'  => substr($order->recipient_name, 0, 20),
+            'virtualAccountEmail' => $order->user?->email ?? 'customer@tokobuku.com',
+            'virtualAccountPhone' => $order->recipient_phone,
+            'trxId'               => str_replace('#', '', $order->order_number),
+            'totalAmount'         => [
+                'value'    => number_format($order->grand_total, 2, '.', ''),
+                'currency' => 'IDR',
             ],
-            'virtual_account_info' => [
-                'billing_type'      => 'FIX_BILL',
-                'expired_time'      => 24,
-                'reusable_status'   => false,
-                'info1'             => 'Toko Buku',
-                'info2'             => $order->order_number,
-                'info3'             => 'Terima kasih',
-            ],
-            'customer' => [
-                'name'  => $order->recipient_name,
-                'email' => $order->user?->email ?? 'customer@tokobuku.com',
-                'phone' => $order->recipient_phone,
+            'expiredDate'         => $expiredDate,
+            'additionalInfo'      => [
+                'channel'          => $channel,
+                'virtualAccountConfig' => [
+                    'reusableStatus' => false,
+                ],
             ],
         ];
 
-        $signature = $this->generateSignature('POST', '/checkout/v1/payment/virtual-account', $requestId, $requestDate, $body);
+        $signature = $this->generateSignature('POST', '/snap/v1.0/transfer-va/create-va', $requestId, $requestDate, $body);
 
         try {
-            $response = Http::withHeaders([
-                'Client-Id'    => $this->clientId,
-                'Request-Id'   => $requestId,
-                'Request-Timestamp' => $requestDate,
-                'Signature'    => $signature,
-                'Content-Type' => 'application/json',
-            ])->post($this->baseUrl . '/checkout/v1/payment/virtual-account', $body);
+            $http = Http::withHeaders([
+                'X-PARTNER-ID'      => $this->clientId,
+                'X-TIMESTAMP'       => $requestDate,
+                'X-SIGNATURE'       => $signature,
+                'X-EXTERNAL-ID'     => $requestId,
+                'CHANNEL-ID'        => 'VRITUAL_ACCOUNT_' . strtoupper($order->payment_method),
+                'Content-Type'      => 'application/json',
+                'Accept'            => 'application/json',
+            ]);
+
+            // Disable SSL verify di local (XAMPP tidak punya CA bundle)
+            if (app()->environment('local')) {
+                $http = $http->withoutVerifying();
+            }
+
+            $response = $http->post($this->baseUrl . '/snap/v1.0/transfer-va/create-va', $body);
 
             $data = $response->json();
 
-            if ($response->successful() && isset($data['virtual_account_info']['virtual_account_number'])) {
-                $vaNumber = $data['virtual_account_info']['virtual_account_number'];
+            // Log semua detail untuk debugging
+            Log::info('DOKU VA Request', [
+                'client_id'  => $this->clientId,
+                'base_url'   => $this->baseUrl,
+                'order'      => $order->order_number,
+                'amount'     => $order->grand_total,
+            ]);
+            Log::info('DOKU VA Response', [
+                'status'   => $response->status(),
+                'body'     => $data,
+            ]);
 
-                // Update payment_code di order
+            if ($response->successful() && isset($data['virtualAccountData']['virtualAccountNo'])) {
+                $vaNumber = $data['virtualAccountData']['virtualAccountNo'];
                 $order->update(['payment_code' => $vaNumber]);
-
+                Log::info('DOKU VA Success', ['va_number' => $vaNumber]);
                 return redirect()->route('payment.code');
             }
 
-            Log::error('DOKU VA Error', ['response' => $data]);
+            Log::error('DOKU VA Error', [
+                'http_status' => $response->status(),
+                'response'    => $data,
+            ]);
             return redirect()->route('payment.code');
 
         } catch (\Exception $e) {
@@ -136,7 +156,8 @@ class DokuController extends Controller
                     'quantity' => $item->quantity,
                 ])->toArray(),
                 'amount'         => $order->grand_total,
-                'callback_url'   => route('payment.doku.callback'),
+                'callback_url'        => config('doku.callback_url') ?: route('payment.doku.callback'),
+                'notification_url'    => config('doku.callback_url') ?: route('payment.doku.callback'),
             ],
             'customer' => [
                 'name'  => $order->recipient_name,
@@ -148,13 +169,21 @@ class DokuController extends Controller
         $signature = $this->generateSignature('POST', '/checkout/v1/payment/qris', $requestId, $requestDate, $body);
 
         try {
-            $response = Http::withHeaders([
-                'Client-Id'         => $this->clientId,
-                'Request-Id'        => $requestId,
-                'Request-Timestamp' => $requestDate,
-                'Signature'         => $signature,
+            $http = Http::withHeaders([
+                'X-PARTNER-ID'      => $this->clientId,
+                'X-TIMESTAMP'       => $requestDate,
+                'X-SIGNATURE'       => $signature,
+                'X-EXTERNAL-ID'     => $requestId,
+                'CHANNEL-ID'        => 'VRITUAL_ACCOUNT_' . strtoupper($order->payment_method),
                 'Content-Type'      => 'application/json',
-            ])->post($this->baseUrl . '/checkout/v1/payment/qris', $body);
+                'Accept'            => 'application/json',
+            ]);
+
+            if (app()->environment('local')) {
+                $http = $http->withoutVerifying();
+            }
+
+            $response = $http->post($this->baseUrl . '/snap/v1.0/qr/qr-mpm-generate', $body);
 
             $data = $response->json();
 

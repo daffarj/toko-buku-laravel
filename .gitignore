@@ -16,6 +16,14 @@
 /public/build
 /public/hot
 /public/storage
+# Private keys & credentials — JANGAN PERNAH di-commit
+private.key
+private_new.key
+pkcs8.key
+public.key
+public_new.key
+*.pem
+storage/app/*.key
 /storage/*.key
 /storage/pail
 /vendor
@@ -23,9 +31,3 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
-private.key
-private_new.key
-pkcs8.key
-public.key
-public_new.key
-storage/app/*.key

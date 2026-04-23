@@ -24,11 +24,14 @@ class DokuController extends Controller
     // Default pakai CIMB karena paling umum di sandbox baru.
     // Ganti nilai ini sesuai bank yang aktif di akunmu.
     // ─────────────────────────────────────────────────────────
-    private const CHANNEL_MAP = [
-        'BCA'     => 'VIRTUAL_ACCOUNT_BANK_CIMB',
-        'Mandiri' => 'VIRTUAL_ACCOUNT_BANK_CIMB',
-        'BNI'     => 'VIRTUAL_ACCOUNT_BANK_CIMB',
-        'BRI'     => 'VIRTUAL_ACCOUNT_BANK_CIMB',
+    // Konfigurasi per bank dari DOKU Dashboard → Settings → Virtual Account SNAP → Configure
+    // partner_service_id : kolom "Partner Service ID"
+    // customer_prefix    : kolom "Prefix Customer No" — customerNo harus diawali angka ini
+    private const BANK_CONFIG = [
+        'BCA'     => ['channel' => 'VIRTUAL_ACCOUNT_BCA',          'partner_service_id' => '19008', 'customer_prefix' => '9'],
+        'Mandiri' => ['channel' => 'VIRTUAL_ACCOUNT_BANK_MANDIRI',  'partner_service_id' => '86188', 'customer_prefix' => '0'],
+        'BNI'     => ['channel' => 'VIRTUAL_ACCOUNT_BNI',           'partner_service_id' => '8492',  'customer_prefix' => '3'],
+        'BRI'     => ['channel' => 'VIRTUAL_ACCOUNT_BRI',           'partner_service_id' => '13925', 'customer_prefix' => '6'],
     ];
 
     // ─────────────────────────────────────────────────────────
@@ -94,15 +97,21 @@ class DokuController extends Controller
 
             // ── Susun parameter DTO ───────────────────────────────
 
-            // partnerServiceId: dari DOKU Dashboard → Settings → Virtual Account SNAP → Configure
-            // Format: 8 karakter, left-pad spasi. Contoh: "19008" → "   19008"
-            $partnerServiceId = str_pad(config('doku.partner_service_id'), 8, ' ', STR_PAD_LEFT);
+            // Ambil konfigurasi bank berdasarkan payment_method order
+            $bankConfig       = self::BANK_CONFIG[$order->payment_method] ?? self::BANK_CONFIG['BCA'];
+            $channel          = $bankConfig['channel'];
+            $rawServiceId     = $bankConfig['partner_service_id'];
 
-            // customerNo: numerik, maks 20 digit, identifikasi unik per transaksi
-            // Pakai order->id left-pad nol supaya stabil dan bisa di-trace
-            $customerNo = str_pad((string) $order->id, 20, '0', STR_PAD_LEFT);
+            // partnerServiceId: WAJIB 8 karakter, left-pad spasi
+            // Contoh: "19008" → "   19008", "86188" → "   86188"
+            $partnerServiceId = str_pad($rawServiceId, 8, ' ', STR_PAD_LEFT);
 
-            // virtualAccountNo = partnerServiceId + customerNo (tanpa spasi internal)
+            // customerNo: diawali dengan Prefix Customer No dari dashboard, diikuti order ID
+            // Contoh BCA prefix=9: "9" + "21" = "921"
+            $customerPrefix = $bankConfig['customer_prefix'];
+            $customerNo     = $customerPrefix . $order->id;
+
+            // virtualAccountNo = partnerServiceId (8 char) + customerNo
             $virtualAccountNo = $partnerServiceId . $customerNo;
 
             // trxId: invoice number unik, tambahkan timestamp agar tidak tabrakan di retry
@@ -126,8 +135,7 @@ class DokuController extends Controller
             // Amount: format "xxxxxx.00" sesuai standar ISO 4217 DOKU
             $amount = number_format((float) $order->grand_total, 2, '.', '');
 
-            // Channel VA (bank)
-            $channel = self::CHANNEL_MAP[$order->payment_method] ?? 'VIRTUAL_ACCOUNT_BANK_CIMB';
+
 
             // Expired 24 jam, format ISO-8601 dengan timezone +07:00
             $expiredDate = now('Asia/Jakarta')->addHours(24)->format('Y-m-d\TH:i:sP');

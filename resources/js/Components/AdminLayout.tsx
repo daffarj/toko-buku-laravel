@@ -60,17 +60,16 @@ export default function AdminLayout({ children }: Props) {
             >
                 {/* Logo */}
                 <div className="px-4 py-5 border-b border-white/10">
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-[#F59E0B] rounded-lg flex items-center justify-center">
-                            <BookOpen size={16} className="text-white" />
-                        </div>
-                        <div>
-                            <p className="text-white text-sm font-semibold">
-                                Toko Buku
-                            </p>
-                            <p className="text-white/50 text-xs">Admin Panel</p>
-                        </div>
-                    </div>
+                    <Link href="/" className="flex items-center gap-2">
+                        <img
+                            src="/logo.svg"
+                            alt="Toko Buku"
+                            className="h-8 w-auto"
+                        />
+                    </Link>
+                    <p className="text-white/50 text-xs mt-1 pl-0.5">
+                        Admin Panel
+                    </p>
                 </div>
 
                 {/* Nav */}

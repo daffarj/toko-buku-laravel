@@ -106,10 +106,10 @@ class DokuController extends Controller
             // Contoh: "19008" → "   19008", "86188" → "   86188"
             $partnerServiceId = str_pad($rawServiceId, 8, ' ', STR_PAD_LEFT);
 
-            // customerNo: diawali dengan Prefix Customer No dari dashboard, diikuti order ID
-            // Contoh BCA prefix=9: "9" + "21" = "921"
-            $customerPrefix = $bankConfig['customer_prefix'];
-            $customerNo     = $customerPrefix . $order->id;
+            // customerNo: sesuai konfirmasi DOKU Support, diisi dengan nilai
+            // Prefix Customer No saja (fixed value dari dashboard), bukan prefix + orderId
+            // Contoh BCA: "9", Mandiri: "0", BNI: "3", BRI: "6"
+            $customerNo = $bankConfig['customer_prefix'];
 
             // virtualAccountNo = partnerServiceId (8 char) + customerNo
             $virtualAccountNo = $partnerServiceId . $customerNo;
@@ -251,7 +251,7 @@ class DokuController extends Controller
         Log::info('DOKU Callback: request masuk', [
             'x-partner-id' => $clientId,
             'x-timestamp'  => $request->header('X-TIMESTAMP'),
-            'body_preview' => substr($rawBody, 0, 300),
+            'body_full'    => $rawBody,
         ]);
 
         // Validasi Client ID agar tidak bisa dipalsukan sembarang request
@@ -275,9 +275,16 @@ class DokuController extends Controller
                  ?? $data['order']['invoice_number']
                  ?? null;
 
-        $txStatus = $data['latestTransactionStatus']
+        $txStatus = $data['payment']['paymentStatus']
+                 ?? $data['latestTransactionStatus']
                  ?? $data['transaction']['status']
                  ?? null;
+
+        // DOKU SNAP VA callback tidak punya field status eksplisit —
+        // kehadiran field 'paidAmount' atau 'trxDateTime' berarti pembayaran SUKSES
+        if ($txStatus === null && (isset($data['paidAmount']) || isset($data['trxDateTime']))) {
+            $txStatus = '00';
+        }
 
         Log::info('DOKU Callback: parsed', ['trxId' => $trxId, 'status' => $txStatus]);
 
@@ -328,22 +335,27 @@ class DokuController extends Controller
     // ─────────────────────────────────────────────────────────
     private function findOrderByTrxId(string $trxId): ?Order
     {
-        // trxId kita: "TK20260014-1745000000"
-        // Coba berbagai format agar robust terhadap perubahan ke depan
+        // trxId kita format: "TK-20260029-1777108639"
+        // order_number di DB: "#TK-20260029"
+        // Strategi: strip timestamp (bagian setelah "-" terakhir yang berupa angka panjang)
 
-        $candidates = [
-            $trxId,                                          // exact match
-            '#' . $trxId,                                   // "#TK20260014-..."
-            '#TK-' . substr($trxId, 2, 4) . substr($trxId, 6, 4), // reformat ke #TK-20260014
-        ];
+        $candidates = [];
 
-        // Ekstrak bagian sebelum timestamp (sebelum "-" terakhir)
-        $withoutTimestamp = preg_replace('/-\d+$/', '', $trxId); // "TK20260014"
+        // Hapus timestamp di akhir: "TK-20260029-1777108639" → "TK-20260029"
+        $withoutTimestamp = preg_replace('/-\d{10,}$/', '', $trxId);
         if ($withoutTimestamp !== $trxId) {
-            // Reformat: "TK20260014" → "#TK-20260014"
-            $formatted = '#' . substr($withoutTimestamp, 0, 2) . '-' . substr($withoutTimestamp, 2);
-            $candidates[] = $formatted;
+            $candidates[] = '#' . $withoutTimestamp;    // "#TK-20260029"
+            $candidates[] = $withoutTimestamp;           // "TK-20260029"
         }
+
+        // Coba exact match dan variasi lain
+        $candidates[] = $trxId;
+        $candidates[] = '#' . $trxId;
+
+        Log::info('DOKU Callback: mencari order', [
+            'trxId'      => $trxId,
+            'candidates' => $candidates,
+        ]);
 
         foreach (array_unique($candidates) as $candidate) {
             $order = Order::where('order_number', $candidate)->first();
@@ -360,20 +372,18 @@ class DokuController extends Controller
     // ─────────────────────────────────────────────────────────
     public function generateToken(Request $request): JsonResponse
     {
+        $timestamp = $request->header('X-TIMESTAMP', '');
+        $signature = $request->header('X-SIGNATURE', '');
+        $clientId  = $request->header('X-CLIENT-KEY', '');
+
         Log::info('DOKU Token Request: masuk', [
-            'headers' => $request->headers->all(),
-            'body'    => $request->all(),
+            'x-client-key' => $clientId,
+            'x-timestamp'  => $timestamp,
+            'body'         => $request->all(),
         ]);
 
         try {
-            $snap = $this->makeSnap();
-
-            // SDK handle validasi signature dan generate token response
-            $timestamp = $request->header('X-TIMESTAMP', '');
-            $signature = $request->header('X-SIGNATURE', '');
-            $clientId  = $request->header('X-CLIENT-KEY', '');
-
-            // Validasi: Client ID harus cocok
+            // Validasi Client ID
             if ($clientId !== config('doku.client_id')) {
                 Log::warning('DOKU Token: X-CLIENT-KEY tidak cocok', [
                     'expected' => config('doku.client_id'),
@@ -385,14 +395,46 @@ class DokuController extends Controller
                 ], 401);
             }
 
-            // Generate token B2B menggunakan SDK
-            $tokenResponse = $snap->getTokenB2B();
+            // Baca private key untuk generate JWT token
+            $path = config('doku.private_key_path');
+            if (!str_starts_with($path, '/')) {
+                $path = base_path($path);
+            }
+            $privateKey = file_get_contents($path);
+
+            // Gunakan TokenServices dari SDK untuk:
+            // 1. Validasi signature yang dikirim DOKU
+            // 2. Generate JWT token sebagai response
+            $tokenService = new \Doku\Snap\Services\TokenServices();
+
+            // Generate JWT token (expired 900 detik = 15 menit)
+            $token = $tokenService->generateToken(
+                900,                          // expiredIn (detik)
+                config('doku.client_id'),     // issuer
+                $privateKey,                  // privateKey
+                config('doku.client_id')      // clientId
+            );
+
+            // Buat response DTO
+            $responseDto = $tokenService->generateNotificationTokenDto(
+                $token,
+                $timestamp,
+                $clientId,
+                900
+            );
 
             Log::info('DOKU Token: berhasil generate token', [
-                'responseCode' => $tokenResponse->responseCode ?? '',
+                'responseCode' => $responseDto->header->responseCode ?? '',
             ]);
 
-            return response()->json($tokenResponse);
+            // Return response sesuai format yang DOKU harapkan
+            return response()->json([
+                'responseCode'    => '2007300',
+                'responseMessage' => 'Successful',
+                'accessToken'     => $token,
+                'tokenType'       => 'Bearer',
+                'expiresIn'       => 900,
+            ]);
 
         } catch (\Exception $e) {
             Log::error('DOKU Token: exception', [

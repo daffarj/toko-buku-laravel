@@ -203,5 +203,26 @@ class OrderController extends Controller
         ]);
     }
 
+    // ─────────────────────────────────────────────────────────
+    // Cek status order untuk polling dari PaymentCode.tsx
+    // Route: GET /payment/status?order=#TK-20260032
+    // ─────────────────────────────────────────────────────────
+    public function checkStatus(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $orderNumber = urldecode($request->query('order', ''));
 
+        if (!$orderNumber) {
+            return response()->json(['status' => 'not_found'], 404);
+        }
+
+        $order = Order::where('order_number', $orderNumber)
+                      ->where('user_id', auth()->id())
+                      ->first();
+
+        if (!$order) {
+            return response()->json(['status' => 'not_found'], 404);
+        }
+
+        return response()->json(['status' => $order->status]);
+    }
 }

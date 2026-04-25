@@ -34,6 +34,7 @@ Route::post('/payment/doku/va/create', [DokuController::class, 'createVirtualAcc
 Route::post('/payment/doku/qris/create', [DokuController::class, 'createQris'])->name('payment.doku.qris');
 
 // Kedua route ini dipanggil DOKU dari luar — harus withoutMiddleware CSRF
+Route::get('/payment/status', [OrderController::class, 'checkStatus'])->name('payment.status');
 Route::post('/payment/doku/token', [DokuController::class, 'generateToken'])
     ->name('payment.doku.token')
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);

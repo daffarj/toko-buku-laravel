@@ -33,25 +33,25 @@ const bankOptions = [
         id: "BCA",
         name: "Bank BCA",
         accountName: "Toko Buku Indonesia",
-        logo: "🏦",
+        logo: "/banks/bca.svg",
     },
     {
         id: "Mandiri",
         name: "Bank Mandiri",
         accountName: "Toko Buku Indonesia",
-        logo: "🏛️",
+        logo: "/banks/mandiri.svg",
     },
     {
         id: "BNI",
         name: "Bank BNI",
         accountName: "Toko Buku Indonesia",
-        logo: "🏢",
+        logo: "/banks/bni.svg",
     },
     {
         id: "BRI",
         name: "Bank BRI",
         accountName: "Toko Buku Indonesia",
-        logo: "🏗️",
+        logo: "/banks/bri.svg",
     },
 ];
 const walletOptions = [
@@ -209,9 +209,19 @@ export default function PaymentMethod({
                                                     )
                                                 }
                                             />
-                                            <span className="text-2xl">
-                                                {bank.logo}
-                                            </span>
+                                            <div className="w-16 h-10 flex items-center justify-center flex-shrink-0">
+                                                {bank.logo.startsWith("/") ? (
+                                                    <img
+                                                        src={bank.logo}
+                                                        alt={bank.name}
+                                                        className="h-8 w-auto object-contain"
+                                                    />
+                                                ) : (
+                                                    <span className="text-2xl">
+                                                        {bank.logo}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div className="flex-1">
                                                 <p className="text-sm font-semibold text-[#1F2937]">
                                                     {bank.name}

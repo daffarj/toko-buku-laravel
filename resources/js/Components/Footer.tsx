@@ -36,7 +36,7 @@ export function Footer() {
                         </Link>
                     </nav>
                     <p className="text-sm text-white/50">
-                        © 2026 Toko Buku. Semua hak dilindungi.
+                        © 2026 Toko Buku Jaya. Semua hak dilindungi.
                     </p>
                 </div>
             </div>

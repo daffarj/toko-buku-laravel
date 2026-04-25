@@ -60,7 +60,7 @@ export default function AdminLayout({ children }: Props) {
             >
                 {/* Logo */}
                 <div className="px-4 py-5 border-b border-white/10">
-                    <Link href="/" className="flex items-center gap-2">
+                    <Link href="/admin" className="flex items-center gap-2">
                         <img
                             src="/logo.svg"
                             alt="Toko Buku"

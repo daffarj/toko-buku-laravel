@@ -55,10 +55,10 @@ const bankOptions = [
     },
 ];
 const walletOptions = [
-    { id: "GoPay", name: "GoPay", logo: "💚" },
-    { id: "OVO", name: "OVO", logo: "💜" },
-    { id: "DANA", name: "DANA", logo: "💙" },
-    { id: "ShopeePay", name: "ShopeePay", logo: "🧡" },
+    { id: "GoPay", name: "GoPay", logo: "/banks/gopay.svg" },
+    { id: "OVO", name: "OVO", logo: "/banks/ovo.svg" },
+    { id: "DANA", name: "DANA", logo: "/banks/dana.svg" },
+    { id: "ShopeePay", name: "ShopeePay", logo: "/banks/shopeepay.svg" },
 ];
 
 export default function PaymentMethod({
@@ -210,16 +210,10 @@ export default function PaymentMethod({
                                                 }
                                             />
                                             <div className="w-16 h-10 flex items-center justify-center flex-shrink-0">
-                                                {bank.logo.startsWith("/") ? (
-                                                    <img
-                                                        src={bank.logo}
-                                                        alt={bank.name}
-                                                        className="h-8 w-auto object-contain"
-                                                    />
+                                                {bank.logo.startsWith('/') ? (
+                                                    <img src={bank.logo} alt={bank.name} className="h-8 w-auto object-contain" />
                                                 ) : (
-                                                    <span className="text-2xl">
-                                                        {bank.logo}
-                                                    </span>
+                                                    <span className="text-2xl">{bank.logo}</span>
                                                 )}
                                             </div>
                                             <div className="flex-1">
@@ -275,9 +269,13 @@ export default function PaymentMethod({
                                                     )
                                                 }
                                             />
-                                            <span className="text-xl">
-                                                {wallet.logo}
-                                            </span>
+                                            <div className="w-16 h-10 flex items-center justify-center flex-shrink-0">
+                                                {wallet.logo.startsWith('/') ? (
+                                                    <img src={wallet.logo} alt={wallet.name} className="h-8 w-auto object-contain rounded-lg" />
+                                                ) : (
+                                                    <span className="text-xl">{wallet.logo}</span>
+                                                )}
+                                            </div>
                                             <span className="text-sm font-semibold text-[#1F2937]">
                                                 {wallet.name}
                                             </span>

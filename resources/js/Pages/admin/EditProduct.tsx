@@ -348,7 +348,12 @@ export default function EditProduct({ book, categories }: Props) {
                             className={`relative w-12 h-6 rounded-full transition-colors ${data.in_stock ? "bg-[#10B981]" : "bg-gray-300"}`}
                         >
                             <span
-                                className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${data.in_stock ? "translate-x-7" : "translate-x-1"}`}
+                                className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"
+                                style={{
+                                    transform: data.in_stock
+                                        ? "translateX(26px)"
+                                        : "translateX(2px)",
+                                }}
                             />
                         </button>
                     </div>
